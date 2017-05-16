@@ -47,13 +47,13 @@
 
 const char* mqtt_server = "mypi3";
 const char* mqttAnnounce = "home/msg"; // general messages
-const char* mqttPub = "home/hygro1/msg"; // general messages
-const char* mqttSub = "home/hygro1/cmd"; // general commands
-const char* mqttTemperature = "home/hygro1/temperature";
-const char* mqttBattery = "home/hygro1/battery"; // general commands
-const char* mqttRSSI = "home/hygro1/rssi"; // general commands
-const char* mqttADC = "home/hygro1/adc"; // general commands
-const char* nodeName = "hygro1"; // hostname
+const char* mqttPub = "home/hygro/livingroom_window/msg"; // general messages
+const char* mqttSub = "home/hygro/livingroom_window/cmd"; // general commands
+const char* mqttTemperature = "home/hygro/livingroom_window/temperature"; // messages
+const char* mqttBattery = "home/hygro/livingroom_window/battery"; // messages
+const char* mqttRSSI = "home/hygro/livingroom_window/rssi"; // messages
+const char* mqttADC = "home/hygro/livingroom_window/probe"; // messages
+const char* nodeName = "livingroom_window"; // hostname
 
 uint16_t lastReconnectAttempt = 0;
 uint16_t lastMsg = 0;
@@ -195,7 +195,7 @@ boolean mqttReconnect() { // connect or reconnect to MQTT server
     if (serialDebug) Serial.println("Established MQTT connection.");
     // Once connected, publish an announcement...
     sprintf(msg,"Hello from %s", nodeName);
-    mqtt.publish(mqttAnnounce, msg);
+    mqtt.publish(mqttPub, msg);
     // ... and resubscribe
     mqtt.subscribe(mqttSub);
     useMQTT = true;
@@ -380,7 +380,8 @@ void loop() {
   }
 
   String vStr;
-  char myChr[12];
+  char myChr[6];
+  char myMQTT[32];
 
   if (serialDebug) {
     Serial.print(CLS); // home cursor
@@ -392,8 +393,9 @@ void loop() {
     if (serialDebug) {
       Serial.print(x);  Serial.print("="); Serial.println(adc[x]);
     }
-    sprintf(myChr, "%u=%u", x, adc[x]);
-    mqtt.publish(mqttADC, myChr);
+    sprintf(myChr, "%u", adc[x]);
+    sprintf(myMQTT, "%s/%u", mqttADC, x + 1);
+    mqtt.publish(myMQTT, myChr);
   }
 
   // scan i2c bus
@@ -405,18 +407,24 @@ void loop() {
 
   mqtt.publish(mqttPub, "Sleeping in 60 sec");
 
-  uint16_t cnt = 5; // 60,000 msec
+  uint16_t cnt = 240; // 60,000 msec
   while(cnt--) {
     ArduinoOTA.handle();
     mqtt.loop();
+    if (setPolo) {
+      setPolo = false;
+      mqtt.publish(mqttPub, "Polo!");
+      skipSleep = true;
+    }
     delay(250);
   }
 
   if (!skipSleep) {
-    mqtt.publish(mqttPub, "Back in 5");
+    mqtt.publish(mqttPub, "Back in half an hour");
     mqtt.loop();
+    uint32_t sleepyTime = 3600000000;
 
-    // ESP.deepSleep(1000000 * 300, WAKE_RF_DEFAULT); // sleep for 5 min
+    ESP.deepSleep(sleepyTime, WAKE_RF_DEFAULT); // sleep for 60 min
 
   }
 }
